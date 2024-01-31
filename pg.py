@@ -11,8 +11,9 @@ from misc import layer_init, seed_everything
 import argparse
 import gym_examples
 import pickle 
+from model import PolicyNetwork, LDGNetwork, FDGNetwork
 # Constants
-GAMMA = 0.99
+GAMMA = 1.0
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -29,28 +30,6 @@ parser.add_argument('--lam2', type=float, default=0.1, help='regularization fact
 
 args = parser.parse_args()
 seed_everything(args.seed)
-
-class PolicyNetwork(nn.Module):
-    def __init__(self, num_inputs, num_actions, hidden_size, learning_rate=1e-2, seed=0):
-        super(PolicyNetwork, self).__init__()
-
-        self.num_actions = num_actions
-        torch.manual_seed(seed)
-        self.linear1 = nn.Linear(num_inputs, num_actions)
-        self.optimizer = optim.SGD(self.parameters(), lr=learning_rate)
-
-    def forward(self, state):
-        x = F.softmax(self.linear1(state), dim=1)
-        #x = F.softmax(self.linear2(x), dim=1)
-        return x 
-    
-    def get_action(self, state):
-        state = torch.from_numpy(state).float().unsqueeze(0)
-        probs = self.forward(Variable(state))
-        highest_prob_action = np.random.choice(self.num_actions, p=np.squeeze(probs.detach().numpy()))
-        log_prob = torch.log(probs.squeeze(0)[highest_prob_action])
-        return highest_prob_action, log_prob
-
 
 def update_policy(policy_network, rewards, log_probs):
     discounted_rewards = []
@@ -76,20 +55,20 @@ def update_policy(policy_network, rewards, log_probs):
     policy_network.optimizer.step()
 
 
-env_name = 'Taxi-v3'
+
 env_name = 'gym_examples/GridWorld-v0'
-env = gym.make(env_name)
+env = gym.make(env_name, size=5)
 torch.manual_seed(args.seed)
 if env_name == 'Taxi-v3':
     policy_net = PolicyNetwork(4, 6, 128, seed=args.seed)
 else:
-    policy_net = PolicyNetwork(2, 4, 128, seed=args.seed)
+    policy_net = PolicyNetwork(2, 4, 0.01, args.seed).double()
 
 max_episode_num = 200
 max_steps = 200
-numsteps = []
-avg_numsteps = []
-all_rewards = []
+gamma_sensitivity = []
+gamma_sensitivity.append([])
+gamma_sensitivity.append([])
 
 for episode in range(max_episode_num):
     #print (episode)
@@ -103,9 +82,10 @@ for episode in range(max_episode_num):
     for steps in range(max_steps):
         #env.render()
         if env_name == 'Taxi-v3':
-            action, log_prob = policy_net.get_action(state)
+
+            action, log_prob, _ = policy_net.get_action(state)
         else:
-            action, log_prob = policy_net.get_action(state['agent'])
+            action, log_prob, _ = policy_net.get_action(state['agent'], train_time=False)
 
         new_state, reward, done, _ = env.step(action)
         if env_name == 'Taxi-v3':
@@ -118,14 +98,12 @@ for episode in range(max_episode_num):
             update_policy(policy_net, rewards, log_probs)
             break
             
-    if episode % 10 == 0:
-        numsteps.append(steps)
-        avg_numsteps.append(np.mean(numsteps[-10:]))
-        all_rewards.append(reward_sum)
-        sys.stdout.write("episode: {}, total reward: {}, average_reward: {}, length: {}\n".format(episode, np.round(np.sum(rewards), decimals = 3),  np.round(np.mean(all_rewards[-10:]), decimals = 3), steps))
-            
-        
+    if episode % 1 == 0:
+        gamma_sensitivity[1].append(steps)
+        gamma_sensitivity[0].append(reward_sum)
+        sys.stdout.write("episode: {}, average_reward: {}, length: {}\n".format(episode,  reward_sum, steps))
+
         state = new_state
-with open('./experiment_data/pg_' + str(args.seed) + '.pkl', 'wb') as f:
-    pickle.dump({'perf_history': all_rewards, 'timestep_history': numsteps}, f)
+with open('./runs/pg_5_times_5_' + str(args.seed) + '.pkl', 'wb') as f:
+    pickle.dump(gamma_sensitivity, f)
         

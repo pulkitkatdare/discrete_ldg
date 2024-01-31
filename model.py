@@ -75,7 +75,7 @@ class PolicyNetwork(nn.Module):
 
 
 class LDGNetwork(nn.Module):
-    def __init__(self, num_inputs, num_actions, learning_rate=1e-1, seed=0):
+    def __init__(self, num_inputs, num_actions, learning_rate=1e-2, seed=0):
         super(LDGNetwork, self).__init__()
         self.learning_rate = learning_rate
         self.num_actions = num_actions
@@ -93,7 +93,7 @@ class LDGNetwork(nn.Module):
             
 
     def forward(self, state_features):
-        x = torch.tanh(self.linear1(state_features))
+        x = self.linear1(state_features)
         return x 
 
 class FDGNetwork(nn.Module):

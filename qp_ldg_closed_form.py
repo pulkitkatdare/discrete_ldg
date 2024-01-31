@@ -30,19 +30,19 @@ parser.add_argument(
 parser.add_argument('--batch_size', type=int, default=128, help='batch size of the code')
 parser.add_argument('--k_batch_size', type=int, default=1, help='k_batch_size')
 parser.add_argument('--my_implementation', type=bool, default=False, help='which version of the algorithm to use')
-parser.add_argument('--gamma', type=float, default=0.99, help='discount factor')
+parser.add_argument('--gamma', type=float, default=1.0, help='discount factor')
 parser.add_argument('--max_episodes', type=int, default=3000, help='number of training episodes')
 parser.add_argument('--max_time_steps', type=int, default=200, help='maximum number of time step per episode')
 parser.add_argument('--lam', type=float, default=0.1, help='regularization factor 1')
 parser.add_argument('--lam2', type=float, default=0.1, help='regularization factor 2')
-parser.add_argument('--size', type=int, default=5, help='grid size')
+parser.add_argument('--size', type=int, default=3, help='grid size')
 
 
 args = parser.parse_args()
 seed_everything(args.seed)   
 
 
-def collect_data(env, replay, policy, state_size=args.size, num_episodes=5, num_steps=100):
+def collect_data(env, replay, policy, state_size=args.size, num_episodes=1, num_steps=200):
     average_rewards = []
     average_timesteps = []
     for i in range(num_episodes):
@@ -103,26 +103,27 @@ if __name__ == "__main__":
     batch_size = args.batch_size
     action_space = 4
     action_size  = action_space
-    regularization = 0.0
-    alpha = 0.99
-    policy = PolicyNetwork(2, 4, 0.009, args.seed).double()
+    regularization = 1.0
+    alpha = 0.5
+    policy = PolicyNetwork(2, 4, 0.01, args.seed).double()
     if CUDA:
         policy = policy.to('cuda:0')
     
     feature_matrix = torch.eye(state_size*state_size*action_space)
+    #feature_matrix = torch.tril(torch.ones(state_size*state_size*action_space, state_size*state_size*action_space))
     
     #f_ldg = FDGNetwork(num_inputs=state_size*state_size*action_space, num_actions=3*4)
     fig, ax = plt.subplots(1, 2, figsize=(9, 3))
     gamma_sensitivity = []
     gamma_sensitivity.append([])
     gamma_sensitivity.append([])
-    
-    for steps in range(500):
+    w_ldg = LDGNetwork(num_inputs=state_size*state_size*action_space, num_actions=3*4)
+    for steps in range(300):
         args.gamma = gamma
         replay = Replay(memory_size=int(1e6), batch_size=batch_size)
         replay, average_rewards, average_timesteps = collect_data(env, replay, policy, state_size=state_size)
         w_ldg = LDGNetwork(num_inputs=state_size*state_size*action_space, num_actions=3*4)
-        for k in range(500):
+        for k in range(300):
             batch, gradients = replay.sample()
             state, action, log_prob, rewards, next_state, done = batch
 
@@ -156,11 +157,12 @@ if __name__ == "__main__":
             A_term3 = torch.bmm(w_sa, encoded_next_state_action_feature)
             A_term3 = -gamma * torch.mean(A_term3, dim=0)
 
-            beta_transpose = torch.matmul(A_term1 + A_term2 + A_term3, torch.linalg.pinv(B + 0.0* torch.eye(4 * state_size**2, 4 * state_size**2)))
+            beta_transpose = torch.matmul(A_term1 + A_term2 + A_term3, torch.linalg.pinv(B + 0.0*torch.eye(4 * state_size**2, 4 * state_size**2)))
             beta = torch.transpose(beta_transpose, 1, 0)
             ## Maximization Term tau 
 
             tau = torch.mean(w_sa, dim=0)
+            tau2 = torch.mean(w_sa - gradients, dim=0)
             ### Minimization Step
             f_sa = torch.matmul(encoded_state_action_feature_transpose.view(batch_size, -1), beta).view(batch_size, 1, -1)
             f_sa_prime = torch.matmul(encoded_next_state_action_feature_transpose.view(batch_size, -1), beta).view(batch_size, 1, -1)
@@ -178,13 +180,15 @@ if __name__ == "__main__":
             loss_term4 = - 0.5 * torch.mean(loss_term4)
 
 
-            loss_term5 = regularization * 0.5 * torch.matmul(torch.transpose(tau, 1, 0), tau)
+            loss_term5 = regularization * 0.5 * (torch.matmul(torch.transpose(tau, 1, 0), tau) + torch.matmul(torch.transpose(tau2, 1, 0), tau2))
 
             loss_w = loss_term1 + loss_term2 + loss_term3 + loss_term4 + loss_term5
 
             w_ldg.optimizer.zero_grad()
             loss_w.backward()
             w_ldg.optimizer.step()
+            #print (loss_w.item())#, torch.mean(w_sa, dim=0).detach())
+            #w_ldg.linear1.weight.data -= torch.mean(w_ldg.linear1.weight.data, dim=1).view(-1, 1)
             #### Baseline Function 
             
             w_sa_transpose = w_sa.view(batch_size, 1, -1)
@@ -219,18 +223,22 @@ if __name__ == "__main__":
 
         
 
-            #print (loss_w.item(), torch.mean(w_sa, dim=0).detach())
-            w_ldg.linear1.weight.data -= torch.mean(w_ldg.linear1.weight.data, dim=1).view(-1, 1)
+            
 
 
 
+        gamma_sensitivity[0].append(average_rewards)
+        gamma_sensitivity[1].append(average_timesteps)
 
 
         
-        gamma_sensitivity[0].append(average_rewards)
-        gamma_sensitivity[1].append(average_timesteps)
+        #gamma_sensitivity[0].append(average_rewards)
+        #gamma_sensitivity[1].append(average_timesteps)
         #
         rewards = rewards #- rho.detach().numpy() #- (1-args.gamma) * average_rewards
+        print (torch.max(w_sa), torch.min(w_sa))
+        w_sa = torch.clip(w_sa, -1, 1)
+        w_sa = w_sa - torch.mean(w_sa, dim=0).view(-1, 1)
 
         
         
@@ -249,7 +257,7 @@ if __name__ == "__main__":
             params.grad = torch.zeros_like(params).type(torch.DoubleTensor)
             #print (params.grad.size(), params.size())
             #params.grad = -grad.view(params.size()).type(torch.DoubleTensor)
-            params.data += 0.05*(grad.view(params.size())) #- 0.01*params.data
+            params.data += 0.1*(grad.view(params.size())) #- 0.01*params.data
             I = I + num_params
         #policy.optimizer.step() # Changes 
         #policy.optimizer.zero_grad()
@@ -263,7 +271,7 @@ if __name__ == "__main__":
     ax[1].set_xlabel('gradient steps')
     ax[1].grid(visible=True)
 
-    plt.savefig('perf') 
+    plt.savefig('perf.png') 
 
     with open('./runs/ldg_' + str(args.seed) + '_' + str(args.gamma) + '_' + str(args.size) + '.pkl', 'wb') as f:
         pickle.dump(gamma_sensitivity, f)
