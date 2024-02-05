@@ -91,7 +91,7 @@ def decode_state(pos, state_size, action_size):
     return [x, y], action
 
 def encode_state_action(state, action, state_size, action_size):
-    return (action_size*(state_size*state[0] + state[1]) + action)
+    return (state_size*state[0] + state[1])
 
 if __name__ == "__main__":
     seed_everything(args.seed)   
@@ -109,7 +109,7 @@ if __name__ == "__main__":
     if CUDA:
         policy = policy.to('cuda:0')
     
-    feature_matrix = torch.eye(state_size*state_size*action_space)
+    feature_matrix = torch.eye(state_size*state_size)#*action_space)
     #feature_matrix = torch.randn(state_size*state_size*action_space, state_size*state_size*action_space)#torch.eye(state_size*state_size*action_space)
     #feature_matrix = torch.tril(torch.ones(state_size*state_size*action_space, state_size*state_size*action_space))
     
@@ -118,12 +118,12 @@ if __name__ == "__main__":
     gamma_sensitivity = []
     gamma_sensitivity.append([])
     gamma_sensitivity.append([])
-    w_ldg = LDGNetwork(num_inputs=state_size*state_size*action_space, num_actions=3*4)
+    w_ldg = LDGNetwork(num_inputs=state_size*state_size, num_actions=3*4)
     for steps in range(200):
         args.gamma = gamma
         replay = Replay(memory_size=int(1e6), batch_size=batch_size)
         replay, average_rewards, average_timesteps = collect_data(env, replay, policy, state_size=state_size)
-        w_ldg = LDGNetwork(num_inputs=state_size*state_size*action_space, num_actions=3*4)
+        w_ldg = LDGNetwork(num_inputs=state_size*state_size, num_actions=3*4)
         for k in range(300):
             batch, gradients = replay.sample()
             state, action, log_prob, rewards, next_state, done = batch
@@ -132,9 +132,9 @@ if __name__ == "__main__":
             gradients = [torch.tensor(grad).type(torch.FloatTensor).view(batch_size, -1, 1) for grad in gradients]
             gradients = torch.cat(gradients, dim=1)
 
-            encoded_state_action = action_size*(state_size * state[:, 0] + state[:, 1]) + action.reshape(-1)
+            encoded_state_action = (state_size * state[:, 0] + state[:, 1])
             encoded_state_action_feature = feature_matrix[encoded_state_action].detach()
-            encoded_next_state_action = action_size*(state_size * next_state[:, 0] + next_state[:, 1]) + next_action.detach().numpy().reshape(-1)
+            encoded_next_state_action = (state_size * next_state[:, 0] + next_state[:, 1])
             encoded_next_state_action_feature = feature_matrix[encoded_next_state_action].detach()
             w_sa = w_ldg(encoded_state_action_feature).view(batch_size, -1, 1)
             #f=_sa = f_ldg(encoded_state_action_feature).view(batch_size, 1, -1)
@@ -152,18 +152,18 @@ if __name__ == "__main__":
             A_term1 = torch.bmm(w_sa, encoded_state_action_feature)
             A_term1 = torch.mean(A_term1, dim=0)
 
-            A_term2 = torch.bmm(gradients, encoded_state_action_feature)
+            A_term2 = torch.bmm(gradients, encoded_next_state_action_feature)
             A_term2 = -torch.mean(A_term2, dim=0)
 
             A_term3 = torch.bmm(w_sa, encoded_next_state_action_feature)
             A_term3 = -gamma * torch.mean(A_term3, dim=0)
 
-            beta_transpose = torch.matmul(A_term1 + A_term2 + A_term3, torch.linalg.pinv(B + 0.0*torch.eye(4 * state_size**2, 4 * state_size**2)))
+            beta_transpose = torch.matmul(A_term1 + A_term2 + A_term3, torch.linalg.pinv(B + 0.0*torch.eye(state_size**2, state_size**2)))
             beta = torch.transpose(beta_transpose, 1, 0)
             ## Maximization Term tau 
 
             tau = torch.mean(w_sa, dim=0)
-            tau2 = torch.mean(w_sa - gradients, dim=0)
+            #tau2 = torch.mean(w_sa - gradients, dim=0)
             ### Minimization Step
             f_sa = torch.matmul(encoded_state_action_feature_transpose.view(batch_size, -1), beta).view(batch_size, 1, -1)
             f_sa_prime = torch.matmul(encoded_next_state_action_feature_transpose.view(batch_size, -1), beta).view(batch_size, 1, -1)
@@ -171,7 +171,7 @@ if __name__ == "__main__":
             loss_term1 = torch.bmm(f_sa, w_sa)
             loss_term1 = torch.mean(loss_term1, dim=0)
 
-            loss_term2 = torch.bmm(f_sa, gradients)
+            loss_term2 = torch.bmm(f_sa_prime, gradients)
             loss_term2 = -torch.mean(loss_term2, dim=0)
 
             loss_term3 = torch.bmm(f_sa_prime, w_sa)
@@ -181,7 +181,7 @@ if __name__ == "__main__":
             loss_term4 = - 0.5 * torch.mean(loss_term4)
 
 
-            loss_term5 = regularization * 0.5 * (torch.matmul(torch.transpose(tau, 1, 0), tau) + torch.matmul(torch.transpose(tau2, 1, 0), tau2))
+            loss_term5 = regularization * 0.5 * (torch.matmul(torch.transpose(tau, 1, 0), tau))
 
             loss_w = loss_term1 + loss_term2 + loss_term3 + loss_term4 + loss_term5
 
@@ -236,15 +236,16 @@ if __name__ == "__main__":
         #gamma_sensitivity[0].append(average_rewards)
         #gamma_sensitivity[1].append(average_timesteps)
         #
-        rewards = rewards  - average_rewards#- rho.detach().numpy() #- (1-args.gamma) * average_rewards
+        rewards = rewards - average_rewards#- rho.detach().numpy() #- (1-args.gamma) * average_rewards
         #rewards = (rewards - np.mean(rewards))/ (np.std(rewards) + 1e-10)
         print (torch.max(w_sa), torch.min(w_sa))
         #w_sa = torch.clip(w_sa, -1, 1)
+        w_sa = w_sa + gradients
         w_sa = (w_sa - torch.mean(w_sa, dim=0).view(-1, 1))/(torch.std(w_sa, dim=0) + 1e-10)
 
         
         
-        log_density_gradient = torch.mean(torch.bmm(w_sa, torch.tensor(rewards).view(-1, 1, 1).type(torch.FloatTensor)), dim=0)
+        log_density_gradient = torch.mean(torch.bmm(w_sa , torch.tensor(rewards).view(-1, 1, 1).type(torch.FloatTensor)), dim=0)
         std = torch.std(torch.bmm(w_sa, torch.tensor(rewards).view(-1, 1, 1).type(torch.FloatTensor)), dim=0)
         print (steps, average_timesteps, average_rewards)
         #policy.optimizer.zero_grad(set_to_none=False)

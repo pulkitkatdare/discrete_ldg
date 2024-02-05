@@ -4,18 +4,20 @@ import numpy as np
 
 
 gamma = 1.0
-size = 5 
-fig, ax = plt.subplots(1, 2, figsize=(12, 5), dpi=120, constrained_layout=False)
+size = 3 
+fig, ax = plt.subplots(1, 2, figsize=(12, 5), dpi=200, constrained_layout=False)
 
-timedata = np.zeros((5, 200))
-rewarddata = np.zeros((5, 200))
+L = 150
+
+timedata = np.zeros((5, L))
+rewarddata = np.zeros((5, L))
 index = 0 
 for i in [0, 1, 2, 3, 4]:
-	with open('./runs/ldg_' + str(i) + '_' + str(gamma) + '_' + str(size) + '.pkl', 'rb') as f:
+	with open('./runs/ldg_' + str(i) + '_' + str(gamma) + '_' + str(size) + '_adam_v2.pkl', 'rb') as f:
 		data = pkl.load(f)
-	temp_time_d = np.asarray(data[1])[0:200]
+	temp_time_d = np.asarray(data[1])[0:L]
 	print (temp_time_d[-1], min(temp_time_d))
-	temp_reward_d = np.asarray(data[0])[0:200]
+	temp_reward_d = np.asarray(data[0])[0:L]
 	timedata[index, :] = temp_time_d
 	rewarddata[index, :] = temp_reward_d
 	index += 1
@@ -27,24 +29,24 @@ std_timedata = np.std(timedata, axis=0)
 print (np.shape(std_timedata))
 
 ax[0].plot(mean_timedata, label='LDPG (ours)', color='#006d2c')
-ax[0].fill_between(np.arange(200), mean_timedata-std_timedata, mean_timedata + std_timedata, color='#006d2c', alpha=0.1)
+ax[0].fill_between(np.arange(L), mean_timedata-std_timedata, mean_timedata + std_timedata, color='#006d2c', alpha=0.1)
 
 mean_rewardsdata = np.mean(rewarddata, axis=0)
 
 std_rewarddata = np.std(rewarddata, axis=0)
 
 ax[1].plot(mean_rewardsdata, color='#006d2c')
-ax[1].fill_between(np.arange(200), mean_rewardsdata-std_rewarddata, mean_rewardsdata + std_rewarddata, color='#006d2c', alpha=0.1)
+ax[1].fill_between(np.arange(L), mean_rewardsdata-std_rewarddata, mean_rewardsdata + std_rewarddata, color='#006d2c', alpha=0.1)
 ''
-timedata = np.zeros((5, 200))
-rewarddata = np.zeros((5, 200))
+timedata = np.zeros((5, L))
+rewarddata = np.zeros((5, L))
 index = 0 
 for i in [0, 1, 2, 3, 4]:
-	with open('./runs/pg_5_times_5_' + str(i)  + '.pkl', 'rb') as f:
+	with open('./runs/pg_3_times_3_' + str(i)  + '.pkl', 'rb') as f:
 		data = pkl.load(f)
-	temp_time_d = np.asarray(data[1])[0:200]
+	temp_time_d = np.asarray(data[1])[0:L]
 	print (temp_time_d[-1], min(temp_time_d))
-	temp_reward_d = np.asarray(data[0])[0:200]
+	temp_reward_d = np.asarray(data[0])[0:L]
 	timedata[index, :] = temp_time_d
 	rewarddata[index, :] = temp_reward_d
 	index += 1
@@ -55,14 +57,14 @@ std_timedata = np.std(timedata, axis=0)
 print (np.shape(std_timedata))
 
 ax[0].plot(mean_timedata, label='PG', color='#de2d26')
-ax[0].fill_between(np.arange(200), mean_timedata-std_timedata, mean_timedata + std_timedata, color='#de2d26', alpha=0.1)
+ax[0].fill_between(np.arange(L), mean_timedata-std_timedata, mean_timedata + std_timedata, color='#de2d26', alpha=0.1)
 
 mean_rewardsdata = np.mean(rewarddata, axis=0)
 
 std_rewarddata = np.std(rewarddata, axis=0)
 
 ax[1].plot(mean_rewardsdata, color='#de2d26')
-ax[1].fill_between(np.arange(200), mean_rewardsdata-std_rewarddata, mean_rewardsdata + std_rewarddata, color='#de2d26', alpha=0.1)
+ax[1].fill_between(np.arange(L), mean_rewardsdata-std_rewarddata, mean_rewardsdata + std_rewarddata, color='#de2d26', alpha=0.1)
 
 
 

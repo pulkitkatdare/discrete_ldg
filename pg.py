@@ -43,7 +43,7 @@ def update_policy(policy_network, rewards, log_probs):
         discounted_rewards.append(Gt)
         
     discounted_rewards = torch.tensor(discounted_rewards)
-    discounted_rewards = (discounted_rewards - discounted_rewards.mean()) / (discounted_rewards.std() + 1e-9) # normalize discounted rewards
+    #discounted_rewards = (discounted_rewards - discounted_rewards.mean()) / (discounted_rewards.std() + 1e-9) # normalize discounted rewards
 
     policy_gradient = []
     for log_prob, Gt in zip(log_probs, discounted_rewards):
@@ -58,11 +58,11 @@ def update_policy(policy_network, rewards, log_probs):
 
 env_name = 'gym_examples/GridWorld-v0'
 env = gym.make(env_name, size=5)
-torch.manual_seed(args.seed)
+#torch.manual_seed(args.seed)
 if env_name == 'Taxi-v3':
     policy_net = PolicyNetwork(4, 6, 128, seed=args.seed)
 else:
-    policy_net = PolicyNetwork(2, 4, 0.01, args.seed).double()
+    policy_net = PolicyNetwork(2, 4, 0.05, args.seed).double()
 
 max_episode_num = 200
 max_steps = 200
