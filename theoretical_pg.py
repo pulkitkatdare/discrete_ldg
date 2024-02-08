@@ -171,7 +171,7 @@ seed_everything(args.seed)
 
 if __name__ == "__main__":
     seed_everything(args.seed)
-    policy = PolicyNetwork(2, 4, 3e-4, args.seed).double()
+    policy = PolicyNetwork(2, 4, 0.05, args.seed).double()
     if CUDA:
         policy = policy.to('cuda:0')
     #agent = LogDensityGradient(policy_net=policy)
@@ -185,7 +185,10 @@ if __name__ == "__main__":
     timestep_history = []
     density_perf = []
     R = args.size
-    for iteration in range(400):
+    gamma_sensitivity = []
+    gamma_sensitivity.append([])
+    gamma_sensitivity.append([])
+    for iteration in range(200):
         d = calculate_d(size, gamma, policy)
         gamma = args.gamma2
         v = calculate_v(size, gamma, policy)
@@ -201,34 +204,40 @@ if __name__ == "__main__":
         perf = calc_perf(d)
         gradient = calculate_gradient(d, q, policy)
         total_params = 0
-        if (iteration%20) == 0:
+        if (iteration%1) == 0:
             average_rewards = []
             average_timesteps = []
-            for i in range(5):
+            for i in range(1):
                 seed_everything(i)   
                 state = env.reset()
                 done = False
                 reward_sum = 0
                 time_step = 0
                 while (time_step < 200):
-                    action = policy.get_action(state)
-                    state, reward, done, info = env.step(action[0].item())
+                    action, _, _ = policy.get_action(state['agent'], train_time=False)
+                    state, reward, done, info = env.step(action)
+                    if done: 
+                        break 
+
                     #print (action[1])
                     
-                    reward_sum += (args.gamma**time_step)*reward
+                    reward_sum += reward
                     time_step += 1
-                if args.gamma == 1:
-                    average_rewards.append(reward_sum/200)
-                else:
-                    average_rewards.append((1-gamma)*reward_sum)
+                
+                average_rewards.append(reward_sum)
                 average_timesteps.append(time_step)
-            print (np.mean(average_rewards), np.mean(average_timesteps), perf)
+            print (iteration, np.mean(average_rewards), np.mean(average_timesteps), perf)
+            gamma_sensitivity[1].append( np.mean(average_timesteps))
+            gamma_sensitivity[0].append( np.mean(average_rewards))
             perf_history.append(np.mean(average_rewards))
             timestep_history.append(np.mean(average_timesteps))
             density_perf.append(perf)
         for params in policy.parameters():
-            params.data += 0.1*(torch.tensor(gradient[total_params:total_params + params.numel(), 0]).type(torch.DoubleTensor)).view(params.size())# - 0.01*params.data
+            params.data += 0.05*(torch.tensor(gradient[total_params:total_params + params.numel(), 0]).type(torch.DoubleTensor)).view(params.size())# - 0.01*params.data
             total_params += params.numel()
+    with open('./runs/theoretical_pg_' + str(args.size) + '_times_' + str(args.size) + '_' + str(args.seed) + '.pkl', 'wb') as f:
+        pickle.dump(gamma_sensitivity, f)
+'''
 import matplotlib.pyplot as plt 
 plt.plot(range(0, 20*len(perf_history), 20), perf_history, color='#2ca25f')
 plt.xlabel('training steps')
@@ -236,10 +245,11 @@ plt.xticks(np.arange(0, 20*len(perf_history), step=20))
 plt.ylabel('Average rewards')
 plt.grid(True)
 plt.savefig('./experiment_data/ldg_performance.png')
+
 with open('./eval_theory_performance/pg_theoretical_' + str(args.seed) + '.pkl', 'wb') as f:
     pickle.dump({'perf_history': perf_history, 'timestep_history': timestep_history, 'density_perf': density_perf}, f)
 
-
+'''
     
     
     
