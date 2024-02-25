@@ -120,7 +120,9 @@ def calculate_d(size, gamma, policy):
         d = d/np.sum(d)
     else:
         ns = null_space(A)
-        d = ns/np.sum(ns)
+        print (np.shape(ns))
+        alpha = 1/(np.sum(ns))
+        d = alpha * ns#np.matmul(A_inv, b)#
     return d
 
 def calculate_v(size, gamma, policy):
@@ -158,7 +160,7 @@ parser.add_argument('--batch_size', type=int, default=128, help='batch size of t
 parser.add_argument('--k_batch_size', type=int, default=1, help='k_batch_size')
 parser.add_argument('--my_implementation', type=bool, default=False, help='which version of the algorithm to use')
 parser.add_argument('--gamma', type=float, default=1.0, help='discount factor')
-parser.add_argument('--gamma2', type=float, default=0.99, help='discount factor')
+parser.add_argument('--gamma2', type=float, default=0.95, help='discount factor')
 parser.add_argument('--max_episodes', type=int, default=3000, help='number of training episodes')
 parser.add_argument('--max_time_steps', type=int, default=200, help='maximum number of time step per episode')
 parser.add_argument('--lam', type=float, default=0.1, help='regularization factor 1')
@@ -188,8 +190,9 @@ if __name__ == "__main__":
     gamma_sensitivity = []
     gamma_sensitivity.append([])
     gamma_sensitivity.append([])
+    gamma_sensitivity.append([])
     for iteration in range(200):
-        d = calculate_d(size, gamma, policy)
+        d = calculate_d(size, 1.0, policy)
         gamma = args.gamma2
         v = calculate_v(size, gamma, policy)
         q = np.zeros((size*size, 4))
@@ -229,6 +232,7 @@ if __name__ == "__main__":
             print (iteration, np.mean(average_rewards), np.mean(average_timesteps), perf)
             gamma_sensitivity[1].append( np.mean(average_timesteps))
             gamma_sensitivity[0].append( np.mean(average_rewards))
+            gamma_sensitivity[2].append(perf)
             perf_history.append(np.mean(average_rewards))
             timestep_history.append(np.mean(average_timesteps))
             density_perf.append(perf)

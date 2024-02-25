@@ -107,6 +107,7 @@ if __name__ == "__main__":
     gamma_sensitivity = []
     gamma_sensitivity.append([])
     gamma_sensitivity.append([])
+    gamma_sensitivity.append([])
     for iteration in range(200):
         A = np.zeros((size*size, size*size), dtype=np.float64)
         b = np.zeros((size*size, 1), dtype=np.float64)
@@ -315,6 +316,7 @@ if __name__ == "__main__":
                 average_timesteps.append(time_step)
             gamma_sensitivity[1].append(np.mean(average_timesteps))
             gamma_sensitivity[0].append(np.mean(average_rewards))
+            gamma_sensitivity[2].append(perf)
             print (iteration, np.mean(average_rewards), np.mean(average_timesteps), perf)
             perf_history.append(np.mean(average_rewards))
             timestep_history.append(np.mean(average_timesteps))
